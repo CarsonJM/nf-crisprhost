@@ -52,7 +52,7 @@ process SPACEREXTRACTOR_CREATETARGETDB {
 
     conda "envs/spacerextractor.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/spacerextractor:0.9.7--pyhdfd78af_0' :
+        'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/29/2900c330cd8dd25094b4cd86e4a32a576ddb340f412ac17f6715ac4136cf495c/data' :
         'biocontainers/spacerextractor:0.9.7--pyhdfd78af_0' }"
 
     input:
@@ -79,7 +79,7 @@ process SPACEREXTRACTOR_MAPTOTARGET {
 
     conda "envs/spacerextractor.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/spacerextractor:0.9.7--pyhdfd78af_0' :
+        'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/29/2900c330cd8dd25094b4cd86e4a32a576ddb340f412ac17f6715ac4136cf495c/data' :
         'biocontainers/spacerextractor:0.9.7--pyhdfd78af_0' }"
 
     input:
