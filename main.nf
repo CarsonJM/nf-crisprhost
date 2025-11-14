@@ -21,7 +21,7 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 process SEQKIT_SPLIT2 {
-    label 'process_medium'
+    label 'process_super_high'
     storeDir "tmp/seqkit_split2"
 
     conda "envs/seqkit.yml"
