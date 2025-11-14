@@ -110,6 +110,9 @@ process SPACEREXTRACTOR_MAPTOTARGET {
     # move tsv file to cwd
     mv ${meta.id}_map_results/${meta.id}_vs_virus_targets_db_all_hits.tsv \\
         ./${meta.id}_all_hits.tsv
+
+    # clean up intermediate mapping results to save disk
+    rm -rf ${meta.id}_map_results
     """
 }
 
