@@ -36,9 +36,13 @@ nextflow run CarsonJM/nf-crisprhost -profile test,<docker/singularity/conda/mamb
 
 ### Usage
 The only arguments for this tool are:
+
 `--spacer_fasta`: Path (or URL) to a FastA file of CRISPR spacers.
+
 `--virus_fasta`: Path (or URL) to a FastA file of viral genomes.
+
 `--chunk_size`: Number (Integer) of spacer sequences contained in each chunk (default: 10,000,000)
+
 `--output`: Path to output TSV file containing information on all spacer-virus hits.
 
 ### Output
