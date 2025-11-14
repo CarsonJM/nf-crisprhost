@@ -62,10 +62,18 @@ process SPACEREXTRACTOR_CREATETARGETDB {
     path("virus_targets_db/")   , emit: db
 
     script:
+    def is_compressed = virus_fasta.getName().endsWith(".gz") ? true : false
+    def fasta_name = virus_fasta.getName().replace(".gz", "")
     """
+    # if gzipped, decompress virus fasta
+    if [ "${is_compressed}" == "true" ]; then
+        gzip -c -d ${virus_fasta} > ${fasta_name}
+    fi
+    
+    # create spacerextractor target db
     spacerextractor \\
         create_target_db \\
-            -i ${virus_fasta} \\
+            -i ${fasta_name} \\
             -d virus_targets_db \\
             -t ${task.cpus} \\
             --replace_spaces
