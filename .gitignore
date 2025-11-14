@@ -3,4 +3,4 @@ work/
 results/
 .vscode/
 tmp/
-phist_table.csv
+*.*sv

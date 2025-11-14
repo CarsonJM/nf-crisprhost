@@ -2,16 +2,16 @@
 
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    CarsonJM/nf-phist
+    CarsonJM/nf-crisprhost
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Github : https://github.com/CarsonJM/nf-phist
+    Github : https://github.com/CarsonJM/nf-crisprhost
 ----------------------------------------------------------------------------------------
     Overview:
-        1. Split input files into chunks of X genomes (Nextflow)
-        2. Download genome chunks (process - aria2c)
-        3. Run downloaded chunks through PHIST (process - phist)
-        4. Delete downloaded chunks that have been run through phist (process - rm)
-        5. Combine PHIST outputs from each chunk into one file (process)
+        1. Download CRISPR spacer file (process - Nextflow)
+        2. Split CRISPR spacer file into chunks (process - SEQKIT_SPLIT2)
+        3. Create spacerextractor DB from virus fasta (process - SPACEREXTRACTOR_CREATETARGETDB)
+        4. Align CRISPR chunks to spacerextractor DB (process - SPACEREXTRACTOR_MAPTOTARGET)
+        5. Combine all mapping results into single output file (process - SPACEREXTRACTOR_COMBINEMAPS)
 */
 
 
@@ -20,99 +20,97 @@
     DEFINE FUNCTIONS / MODULES / SUBWORKFLOWS / WORKFLOWS
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
-process ARIA2C {
-    tag "${meta.id}"
-    label "process_medium"
-    storeDir "tmp/aria2c/${meta.id}"
+process SEQKIT_SPLIT2 {
+    label 'process_medium'
+    storeDir "tmp/seqkit_split2"
 
-    conda "envs/aria2c.yml"
+    conda "envs/seqkit.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://depot.galaxyproject.org/singularity/aria2:1.36.0' :
-        'biocontainers/aria2:1.36.0' }"
+        'https://depot.galaxyproject.org/singularity/seqkit:2.9.0--h9ee0642_0' :
+        'biocontainers/seqkit:2.9.0--h9ee0642_0' }"
 
     input:
-    tuple val(meta), val(urls)
+    path(fasta)
 
     output:
-    tuple val(meta), path("host_fastas/")       , emit: host_fastas
-    tuple val(meta), path("download_complete")  , emit: download_complete
+    path("spacer_split/*")  , emit: split_fastas
 
     script:
-    def download_list   = urls.collect { url -> url.toString() }.join(',')
     """
-    # create an input file for aria2c
-    IFS=',' read -r -a download_array <<< "${download_list}"
-    printf '%s\\n' "\${download_array[@]}" > aria2_file.tsv
-
-    # download fasta files with aria2c
-    aria2c \\
-        --input=aria2_file.tsv \\
-        --dir=host_fastas \\
-        --max-concurrent-downloads=${task.cpus}
-
-    touch download_complete
+    seqkit \\
+        split2 \\
+            ${fasta} \\
+            --threads ${task.cpus} \\
+            --by-size ${params.chunk_size} \\
+            --out-dir spacer_split
     """
 }
 
-process PHIST {
-    tag "${meta.id}"
-    label "process_high"
-    storeDir "tmp/phist/${meta.id}"
-    containerOptions "${ workflow.containerEngine == 'singularity' ?
-        '-B ' + workflow.launchDir :
-        '' }"
+process SPACEREXTRACTOR_CREATETARGETDB {
+    label 'process_high'
+    storeDir "tmp/spacerextractor/createtargetdb"
 
-    conda "envs/phist.yml"
+    conda "envs/spacerextractor.yml"
     container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
-        'https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/b7/b72245719494da16ebe64f0f73e8f29f9880bb89dce1065a5d30c72b82f7cf68/data' :
-        'community.wave.seqera.io/library/kmer-db_python:2fcd54c55e4e0870' }"
+        'https://depot.galaxyproject.org/singularity/spacerextractor:0.9.7--pyhdfd78af_0' :
+        'biocontainers/spacerextractor:0.9.7--pyhdfd78af_0' }"
 
     input:
-    tuple val(meta), val(host_fastas)
     path(virus_fasta)
 
     output:
-    tuple val(meta), path("${meta.id}.phist_table.csv") , emit: phist_tables
+    path("virus_targets_db/")   , emit: db
 
     script:
     """
-    # run phist on virus fasta and host fasta chunk
-    phist.py \\
-        ${virus_fasta} \\
-        ${host_fastas} \\
-        ${meta.id}.phist_table.csv \\
-        ${meta.id}.phist_preds.csv \\
-        -t ${task.cpus}
+    spacerextractor \\
+        create_target_db \\
+            -i ${virus_fasta} \\
+            -d virus_targets_db \\
+            -t ${task.cpus} \\
+            --replace_spaces
     """
 }
 
-process RM_GENOMES {
+process SPACEREXTRACTOR_MAPTOTARGET {
     tag "${meta.id}"
-    label "process_single"
-    storeDir "tmp/rm_genomes/${meta.id}"
+    label 'process_super_high'
+    storeDir "tmp/spacerextractor/maptotarget/${meta.id}"
+
+    conda "envs/spacerextractor.yml"
+    container "${ workflow.containerEngine == 'singularity' && !task.ext.singularity_pull_docker_container ?
+        'https://depot.galaxyproject.org/singularity/spacerextractor:0.9.7--pyhdfd78af_0' :
+        'biocontainers/spacerextractor:0.9.7--pyhdfd78af_0' }"
 
     input:
-    tuple val(meta) , val(host_fastas)
-    tuple val(meta2), val(phist_tables)
+    tuple val(meta), path(spacer_fasta)
+    path(target_db)
 
     output:
-    path("rm_complete")
+    tuple val(meta), path("${meta.id}_all_hits.tsv")    , emit: mapped_results
 
     script:
     """
-    # delete downloaded fastas that have been run through phist
-    rm -rf ${host_fastas}/*
+    # run spacerextractor mapping
+    spacerextractor \\
+        map_to_target \\
+            -i ${spacer_fasta} \\
+            -d ${target_db} \\
+            -o ${meta.id}_map_results \\
+            -t ${task.cpus}
 
-    touch rm_complete
+    # move tsv file to cwd
+    mv ${meta.id}_map_results/${meta.id}_vs_virus_targets_db_all_hits.tsv \\
+        ./${meta.id}_all_hits.tsv
     """
 }
 
-process COMBINE_PHIST {
-    label "process_single"
+process SPACEREXTRACTOR_COMBINEMAPS {
+    label 'process_single'
     storeDir "."
 
     input:
-    path(phist_tables)
+    path(map_tsvs)
 
     output:
     path("${params.output}")    , emit: final_output
@@ -120,58 +118,59 @@ process COMBINE_PHIST {
     script:
     """
     # iterate over phist tables
-    for table in ${phist_tables[0]}; do
-       head -n 2 \${table} > ${params.output}
+    for table in ${map_tsvs[0]}; do
+       head -n 1 \${table} > ${params.output}
     done
 
-    for table in ${phist_tables}; do
-        tail -n +3 \${table} >> ${params.output}
+    for table in ${map_tsvs}; do
+        tail -n +2 \${table} >> ${params.output}
     done
     """
 }
+
 
 // Run entry workflow
 workflow {
     main:
     // Check if output file already exists
     def output_file = file("${params.output}")
+
     if (!output_file.exists()) {
 
-        // 1. Split input files into chunks of X genomes (Nextflow)
-        ch_virus_fasta = channel.fromPath(params.virus_fasta).collect()
-        ch_host_fastas = channel.fromPath(params.host_file)
-            .splitCsv(header: false, strip: true)
-            .flatten()
-            .collate(params.chunk_size)
-            .toList()
-            .flatMap{ file -> file.withIndex() }
-            .map { file, index ->
-                [ [ id: 'chunk_' + index ], file ]
-            }
+        // 1. Load/Download input files
+        ch_virus_fasta = channel.fromPath(params.virus_fasta)
+        ch_spacer_fasta = channel.fromPath(params.spacer_fasta)
 
-        // 2. Download genome chunks (process - aria2c)
-        ARIA2C(
-            ch_host_fastas
+        // 2. Split spacer file into chunks (process - SEQKIT_SPLIT2)
+        SEQKIT_SPLIT2(
+            ch_spacer_fasta
         )
 
-        // 3. Run downloaded chunks through PHIST (process - phist)
-        PHIST(
-            ARIA2C.out.host_fastas,
+        ch_split_fastas = SEQKIT_SPLIT2.out.split_fastas
+            .map { file -> file }
+            .flatten()
+            .map { file ->
+                [ [ id: file.getBaseName() ], file ]
+            }
+
+        // 3. Create spacerextractor DB from virus fasta (process - SPACEREXTRACTOR_CREATETARGETDB)
+        SPACEREXTRACTOR_CREATETARGETDB(
             ch_virus_fasta
         )
 
-        // 4. Delete downloaded chunks that have been run through phist (process - rm)
-        RM_GENOMES(
-            ARIA2C.out.host_fastas,
-            PHIST.out.phist_tables
+        // 4. Align CRISPR chunks to spacerextractor DB (process - SPACEREXTRACTOR_MAPTOTARGET)
+        SPACEREXTRACTOR_MAPTOTARGET(
+            ch_split_fastas,
+            SPACEREXTRACTOR_CREATETARGETDB.out.db.collect()
         )
 
-        // 5. Combine PHIST outputs from each chunk into one file (process)
-        COMBINE_PHIST(
-            PHIST.out.phist_tables.map { _meta, tables -> [ tables ] }.collect()
+        // 5. Combine all mapping results into single output file (process - SPACEREXTRACTOR_COMBINEMAPS)
+        SPACEREXTRACTOR_COMBINEMAPS(
+            SPACEREXTRACTOR_MAPTOTARGET.out.mapped_results.map { _meta, tsvs -> [ tsvs ] }.collect()
         )
+
     } else {
-        println "Output file [${params.output}] already exists! Skipping nf-phist."
+        println "Output file [${params.output}] already exists! Skipping nf-crisprhost."
     }
 
     // Delete intermediate and Nextflow-specific files
