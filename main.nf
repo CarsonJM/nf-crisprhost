@@ -99,20 +99,26 @@ process SPACEREXTRACTOR_MAPTOTARGET {
 
     script:
     """
+    # create new workdir for pre-emption
+    nxf_workdir=\$(pwd)
+    mkdir -p ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
+    cd ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
+
     # run spacerextractor mapping
     spacerextractor \\
         map_to_target \\
-            -i ${spacer_fasta} \\
-            -d ${target_db} \\
+            -i \${nxf_workdir}/${spacer_fasta} \\
+            -d \${nxf_workdir}/${target_db} \\
             -o ${meta.id}_map_results \\
             -t ${task.cpus}
 
     # move tsv file to cwd
     mv ${meta.id}_map_results/${meta.id}_vs_virus_targets_db_all_hits.tsv \\
-        ./${meta.id}_all_hits.tsv
+        \${nxf_workdir}/${meta.id}_all_hits.tsv
+    cd \${nxf_workdir}
 
     # clean up intermediate mapping results to save disk
-    rm -rf ${meta.id}_map_results
+    rm -rf ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
     """
 }
 
