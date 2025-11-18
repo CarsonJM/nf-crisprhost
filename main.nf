@@ -82,7 +82,7 @@ process SPACEREXTRACTOR_CREATETARGETDB {
 
 process SPACEREXTRACTOR_MAPTOTARGET {
     tag "${meta.id}"
-    label 'process_super_high'
+    label 'process_medium'
     storeDir "tmp/spacerextractor/maptotarget/${meta.id}"
 
     conda "envs/spacerextractor.yml"
