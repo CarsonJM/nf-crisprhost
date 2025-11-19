@@ -105,7 +105,7 @@ process SPACEREXTRACTOR_MAPTOTARGET {
     cd ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
 
     # run spacerextractor mapping
-    spacerextractor \\
+    SE_map_get_hits.py \\
         map_to_target \\
             -i \${nxf_workdir}/${spacer_fasta} \\
             -d \${nxf_workdir}/${target_db} \\
