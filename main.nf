@@ -82,7 +82,7 @@ process SPACEREXTRACTOR_CREATETARGETDB {
 
 process SPACEREXTRACTOR_MAPTOTARGET {
     tag "${meta.id}"
-    label 'process_medium'
+    label 'process_super_high'
     storeDir "tmp/spacerextractor/maptotarget/${meta.id}"
 
     conda "envs/spacerextractor.yml"
@@ -99,26 +99,19 @@ process SPACEREXTRACTOR_MAPTOTARGET {
 
     script:
     """
-    # create new workdir for pre-emption
-    nxf_workdir=\$(pwd)
-    mkdir -p ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
-    cd ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
-
     # run spacerextractor mapping
     SE_map_get_hits.py \\
         map_to_target \\
-            -i \${nxf_workdir}/${spacer_fasta} \\
-            -d \${nxf_workdir}/${target_db} \\
+            -i ${spacer_fasta} \\
+            -d ${target_db} \\
             -o ${meta.id}_map_results \\
             -t ${task.cpus}
 
     # move tsv file to cwd
-    mv ${meta.id}_map_results/${meta.id}_vs_virus_targets_db_all_hits.tsv \\
-        \${nxf_workdir}/${meta.id}_all_hits.tsv
-    cd \${nxf_workdir}
+    mv ${meta.id}_map_results/${meta.id}_vs_virus_targets_db_all_hits.tsv ${meta.id}_all_hits.tsv
 
     # clean up intermediate mapping results to save disk
-    rm -rf ${workflow.workDir.toAbsolutePath()}/spacerextractor_maptotarget/${meta.id}/
+    rm -rf ${meta.id}_map_results/
     """
 }
 
